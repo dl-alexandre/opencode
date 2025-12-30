@@ -25,6 +25,8 @@ import { Instance } from "../project/instance"
 import { Vcs } from "../project/vcs"
 import { Agent } from "../agent/agent"
 import { Auth } from "../auth"
+import { RequestContext } from "../auth/request-context"
+import { UnauthenticatedError, ForbiddenError } from "../auth/server-store"
 import { Command } from "../command"
 import { ProviderAuth } from "../provider/auth"
 import { Global } from "../global"
@@ -104,7 +106,62 @@ export namespace Server {
           timer.stop()
         }
       })
-      .use(cors())
+      .use(
+        cors({
+          origin(input) {
+            if (!input) return
+
+            if (input.startsWith("http://localhost:")) return input
+            if (input.startsWith("http://127.0.0.1:")) return input
+            if (input === "tauri://localhost" || input === "http://tauri.localhost") return input
+
+            // *.opencode.ai (https only, adjust if needed)
+            if (/^https:\/\/([a-z0-9-]+\.)*opencode\.ai$/.test(input)) {
+              return input
+            }
+            return
+          },
+        }),
+      )
+      .use(async (c, next) => {
+        // RequestContext middleware for server-side auth
+        // Extracts user context from request (from session, JWT, etc.)
+        // and stores it in AsyncLocalStorage for downstream auth lookups
+        if (Auth.isServerMode()) {
+          // TODO: Extract user context from request
+          // This should come from your session/JWT middleware
+          // For now, we'll skip this for non-server mode
+          // Example:
+          // const userKey = extractUserFromRequest(c)
+          // const orgKey = extractOrgFromRequest(c) ?? 'default'
+          // if (userKey) {
+          //   return RequestContext.run(
+          //     {
+          //       userKey,
+          //       orgKey,
+          //       tokenCache: new Map(),
+          //       refreshBudget: new Set(),
+          //     },
+          //     () => next(),
+          //   )
+          // }
+        }
+        return next()
+      })
+      .use(async (c, next) => {
+        // Error mapping middleware for typed auth errors
+        try {
+          await next()
+        } catch (error) {
+          if (error instanceof UnauthenticatedError) {
+            return c.json({ error: "Authentication required" }, 401)
+          }
+          if (error instanceof ForbiddenError) {
+            return c.json({ error: "Access forbidden" }, 403)
+          }
+          throw error // Re-throw other errors for main error handler
+        }
+      })
       .get(
         "/global/health",
         describeRoute({
