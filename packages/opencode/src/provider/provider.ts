@@ -13,6 +13,7 @@ import { Env } from "../env"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
+import { createSecureProviderFetch } from "./secure-fetch"
 
 // Direct imports for bundled providers
 import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
@@ -886,7 +887,10 @@ export namespace Provider {
           opts.signal = combined
         }
 
-        return fetchFn(input, {
+        // Wrap with secure provider fetch (enforces auth token injection, host allowlists, etc.)
+        const secureFetch = createSecureProviderFetch(model.providerID, fetchFn)
+
+        return secureFetch(input, {
           ...opts,
           // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
           timeout: false,
