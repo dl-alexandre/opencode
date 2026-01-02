@@ -1,0 +1,15 @@
+{
+  "name": "opencode-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "proxy.ts",
+  "license": "MIT",
+  "dependencies": {
+    "basic-auth": "^2.0.1",
+    "dotenv": "^17.2.3",
+    "google-auth-library": "^10.5.0",
+    "http-proxy": "^1.18.1",
+    "opencode-antigravity-auth": "^1.2.7"
+  }
+}
