@@ -7,7 +7,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useSync } from "@/context/sync"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { getFilename } from "@opencode-ai/util/path"
-import { base64Encode } from "@opencode-ai/util/encode"
+import { base64Decode, base64Encode } from "@opencode-ai/util/encode"
 import { iife } from "@opencode-ai/util/iife"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -20,6 +20,7 @@ import { DialogSelectServer } from "@/components/dialog-select-server"
 import { SessionLspIndicator } from "@/components/session-lsp-indicator"
 import { SessionMcpIndicator } from "@/components/session-mcp-indicator"
 import type { Session } from "@opencode-ai/sdk/v2/client"
+import { same } from "@/utils/same"
 
 export function SessionHeader() {
   const globalSDK = useGlobalSDK()
@@ -31,10 +32,12 @@ export function SessionHeader() {
   const dialog = useDialog()
   const sync = useSync()
 
+  const projectDirectory = createMemo(() => base64Decode(params.dir ?? ""))
+
   const sessions = createMemo(() => (sync.data.session ?? []).filter((s) => !s.parentID))
   const currentSession = createMemo(() => sessions().find((s) => s.id === params.id))
   const shareEnabled = createMemo(() => sync.data.config.share !== "disabled")
-  const branch = createMemo(() => sync.data.vcs?.branch)
+  const worktrees = createMemo(() => layout.projects.list().map((p) => p.worktree), [], { equals: same })
 
   function navigateToProject(directory: string) {
     navigate(`/${base64Encode(directory)}`)
@@ -46,7 +49,7 @@ export function SessionHeader() {
   }
 
   return (
-    <header class="h-12 shrink-0 bg-background-base border-b border-border-weak-base flex" data-tauri-drag-region>
+    <header class="h-12 shrink-0 bg-background-base border-b border-border-weak-base flex">
       <button
         type="button"
         class="xl:hidden w-12 shrink-0 flex items-center justify-center border-r border-border-weak-base hover:bg-surface-raised-base-hover active:bg-surface-raised-base-active transition-colors"
@@ -59,13 +62,9 @@ export function SessionHeader() {
           <div class="flex items-center gap-2 min-w-0">
             <div class="hidden xl:flex items-center gap-2">
               <Select
-                options={layout.projects.list().map((project) => project.worktree)}
-                current={sync.directory}
-                label={(x) => {
-                  const name = getFilename(x)
-                  const b = x === sync.directory ? branch() : undefined
-                  return b ? `${name}:${b}` : name
-                }}
+                options={worktrees()}
+                current={sync.project?.worktree ?? projectDirectory()}
+                label={(x) => getFilename(x)}
                 onSelect={(x) => (x ? navigateToProject(x) : undefined)}
                 class="text-14-regular text-text-base"
                 variant="ghost"
@@ -191,7 +190,7 @@ export function SessionHeader() {
                     let shareURL = session.share?.url
                     if (!shareURL) {
                       shareURL = await globalSDK.client.session
-                        .share({ sessionID: session.id, directory: sync.directory })
+                        .share({ sessionID: session.id, directory: projectDirectory() })
                         .then((r) => r.data?.share?.url)
                         .catch((e) => {
                           console.error("Failed to share session", e)
